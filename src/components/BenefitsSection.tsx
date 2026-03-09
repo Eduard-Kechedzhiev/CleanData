@@ -24,17 +24,15 @@ const benefits = [
   },
 ];
 
-const beforeAfter = [
+const beforeAfterRows = [
   {
-    before: "PORK LOINS BONELESS CENTER CUT REF",
-    after: "Pork Loins Boneless Center Cut Refrigerated",
+    product: { before: "PORK LOINS BONELESS CENTER CUT REF", after: "Pork Loins Boneless Center Cut Refrigerated" },
     brand: { before: "(buried in desc)", after: "Hatfield" },
     pack: { before: "(encoded)", after: "5 x 8 LB" },
     score: { before: "—", after: "9/10" },
   },
   {
-    before: "CHKN BRST BNLS SKNLS FRZ 4OZ",
-    after: "Chicken Breast Boneless Skinless Frozen 4oz",
+    product: { before: "CHKN BRST BNLS SKNLS FRZ 4OZ", after: "Chicken Breast Boneless Skinless Frozen 4oz" },
     brand: { before: "(missing)", after: "Tyson" },
     pack: { before: "(unclear)", after: "2 x 10 LB" },
     score: { before: "—", after: "8/10" },
@@ -59,7 +57,6 @@ const BenefitsSection = () => {
           </p>
         </motion.div>
 
-        {/* Benefit cards */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-16">
           {benefits.map((b, i) => (
             <motion.div
@@ -79,7 +76,6 @@ const BenefitsSection = () => {
           ))}
         </div>
 
-        {/* Before/After table */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
@@ -99,22 +95,24 @@ const BenefitsSection = () => {
                 </tr>
               </thead>
               <tbody>
-                {beforeAfter.map((row, i) => (
-                  <tr key={i} className={i > 0 ? "border-t-4 border-muted" : ""}>
-                    {[
-                      { label: "Product Name", before: row.before, after: row.after },
-                      { label: "Brand", before: row.brand.before, after: row.brand.after },
-                      { label: "Pack/Size", before: row.pack.before, after: row.pack.after },
-                      { label: "Quality", before: row.score.before, after: row.score.after },
-                    ].map((cell, j) => (
-                      <tr key={j} className="border-b border-border/50 last:border-0">
-                        <td className="px-4 py-2.5 font-medium text-foreground">{cell.label}</td>
-                        <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{cell.before}</td>
-                        <td className="px-4 py-2.5 text-foreground font-medium">{cell.after}</td>
-                      </tr>
-                    ))}
-                  </tr>
-                ))}
+                {beforeAfterRows.map((row, i) => {
+                  const fields = [
+                    { label: "Product Name", ...row.product },
+                    { label: "Brand", ...row.brand },
+                    { label: "Pack/Size", ...row.pack },
+                    { label: "Quality", ...row.score },
+                  ];
+                  return fields.map((cell, j) => (
+                    <tr
+                      key={`${i}-${j}`}
+                      className={`border-b border-border/50 last:border-0 ${j === 0 && i > 0 ? "border-t-2 border-t-muted" : ""}`}
+                    >
+                      <td className="px-4 py-2.5 font-medium text-foreground">{cell.label}</td>
+                      <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{cell.before}</td>
+                      <td className="px-4 py-2.5 text-foreground font-medium">{cell.after}</td>
+                    </tr>
+                  ));
+                })}
               </tbody>
             </table>
           </div>
