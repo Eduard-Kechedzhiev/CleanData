@@ -4,9 +4,10 @@ import { motion } from "framer-motion";
 interface HeroSectionProps {
   onUpload: (file: File) => void;
   onSampleData: () => void;
+  uploading?: boolean;
 }
 
-const HeroSection = ({ onUpload, onSampleData }: HeroSectionProps) => {
+const HeroSection = ({ onUpload, onSampleData, uploading }: HeroSectionProps) => {
   return (
     <section className="relative bg-hero min-h-[90vh] flex items-center overflow-hidden">
       {/* Subtle grid background */}
@@ -45,7 +46,7 @@ const HeroSection = ({ onUpload, onSampleData }: HeroSectionProps) => {
             transition={{ duration: 0.6, delay: 0.3 }}
             className="mt-10"
           >
-            <UploadWidget onUpload={onUpload} onSampleData={onSampleData} variant="hero" />
+            <UploadWidget onUpload={onUpload} onSampleData={onSampleData} variant="hero" uploading={uploading} />
           </motion.div>
         </div>
       </div>

@@ -17,7 +17,7 @@ const faqs = [
   },
   {
     q: "How long does it take?",
-    a: "About 40 minutes for a typical catalog. We'll email you when it's ready.",
+    a: "About 40 minutes for a typical catalog. Bookmark the results page and check back there when processing finishes.",
   },
   {
     q: "What does it cost?",

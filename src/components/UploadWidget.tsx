@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Upload, FileText, Shield, X } from "lucide-react";
+import { Upload, FileText, Shield, X, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 
@@ -7,9 +7,10 @@ interface UploadWidgetProps {
   onUpload: (file: File) => void;
   onSampleData: () => void;
   variant?: "hero" | "default";
+  uploading?: boolean;
 }
 
-const UploadWidget = ({ onUpload, onSampleData, variant = "hero" }: UploadWidgetProps) => {
+const UploadWidget = ({ onUpload, onSampleData, variant = "hero", uploading }: UploadWidgetProps) => {
   const [dragActive, setDragActive] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -103,7 +104,7 @@ const UploadWidget = ({ onUpload, onSampleData, variant = "hero" }: UploadWidget
                 or <span className="text-primary underline">browse files</span>
               </p>
               <p className={`text-xs mt-2 ${isHero ? "text-hero-muted/60" : "text-muted-foreground/60"}`}>
-                CSV, TSV, or Excel • Up to 50MB
+                CSV, TSV, or Excel &bull; Up to 50MB
               </p>
             </label>
 
@@ -148,14 +149,16 @@ const UploadWidget = ({ onUpload, onSampleData, variant = "hero" }: UploadWidget
                   {formatSize(selectedFile.size)}
                 </p>
               </div>
-              <button
-                onClick={() => { setSelectedFile(null); setError(null); }}
-                className={`p-1 rounded-md transition-colors ${
-                  isHero ? "text-hero-muted hover:text-hero-foreground" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <X className="w-4 h-4" />
-              </button>
+              {!uploading && (
+                <button
+                  onClick={() => { setSelectedFile(null); setError(null); }}
+                  className={`p-1 rounded-md transition-colors ${
+                    isHero ? "text-hero-muted hover:text-hero-foreground" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             <Button
@@ -163,18 +166,28 @@ const UploadWidget = ({ onUpload, onSampleData, variant = "hero" }: UploadWidget
               size="lg"
               className="w-full mt-4"
               onClick={() => onUpload(selectedFile)}
+              disabled={uploading}
             >
-              Upload & Start
+              {uploading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                "Upload & Start"
+              )}
             </Button>
 
-            <button
-              onClick={() => { setSelectedFile(null); setError(null); }}
-              className={`block mx-auto mt-3 text-sm transition-colors ${
-                isHero ? "text-hero-muted hover:text-primary" : "text-muted-foreground hover:text-primary"
-              }`}
-            >
-              Choose different file
-            </button>
+            {!uploading && (
+              <button
+                onClick={() => { setSelectedFile(null); setError(null); }}
+                className={`block mx-auto mt-3 text-sm transition-colors ${
+                  isHero ? "text-hero-muted hover:text-primary" : "text-muted-foreground hover:text-primary"
+                }`}
+              >
+                Choose different file
+              </button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -184,7 +197,7 @@ const UploadWidget = ({ onUpload, onSampleData, variant = "hero" }: UploadWidget
         isHero ? "text-hero-muted/60" : "text-muted-foreground/60"
       }`}>
         <Shield className="w-3.5 h-3.5" />
-        <span className="text-xs">Encrypted in transit & at rest. Auto-deleted within 24 hours.</span>
+        <span className="text-xs">Encrypted in transit. Auto-deleted within 24 hours.</span>
       </div>
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import TrustBar from "@/components/TrustBar";
@@ -8,57 +9,38 @@ import SampleResults from "@/components/SampleResults";
 import BenchmarksSection from "@/components/BenchmarksSection";
 import FAQSection from "@/components/FAQSection";
 import FinalCTA from "@/components/FinalCTA";
-import ProcessingPage from "@/components/ProcessingPage";
-import ResultsPage from "@/components/ResultsPage";
-
-type AppStep = "landing" | "processing" | "results";
+import { uploadFile } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
-  const [step, setStep] = useState<AppStep>("landing");
-  const [capturedEmail, setCapturedEmail] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
 
-  const handleUpload = useCallback((_file: File) => {
-    setStep("processing");
-    window.scrollTo({ top: 0 });
-  }, []);
+  const handleUpload = useCallback(async (file: File) => {
+    setUploading(true);
+    try {
+      const res = await uploadFile(file);
+      navigate(`/jobs/${res.job_id}`);
+    } catch (err: any) {
+      toast({
+        title: "Upload failed",
+        description: err.message || "Something went wrong. Please try again.",
+        variant: "destructive",
+      });
+      setUploading(false);
+    }
+  }, [navigate, toast]);
 
   const handleSampleData = useCallback(() => {
     const el = document.getElementById("sample-results");
     if (el) el.scrollIntoView({ behavior: "smooth" });
   }, []);
 
-  const handleProcessingComplete = useCallback(() => {
-    setStep("results");
-    window.scrollTo({ top: 0 });
-  }, []);
-
-  const handleEmailCapture = useCallback((email: string) => {
-    setCapturedEmail(email);
-  }, []);
-
-  if (step === "processing") {
-    return (
-      <ProcessingPage
-        onComplete={handleProcessingComplete}
-        onEmailCapture={handleEmailCapture}
-        capturedEmail={capturedEmail}
-      />
-    );
-  }
-
-  if (step === "results") {
-    return (
-      <ResultsPage
-        capturedEmail={capturedEmail}
-        onEmailCapture={handleEmailCapture}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen">
       <Navbar />
-      <HeroSection onUpload={handleUpload} onSampleData={handleSampleData} />
+      <HeroSection onUpload={handleUpload} onSampleData={handleSampleData} uploading={uploading} />
       <TrustBar />
       <BenefitsSection />
       <HowItWorks />
