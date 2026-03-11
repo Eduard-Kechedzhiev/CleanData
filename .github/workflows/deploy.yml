@@ -1,0 +1,45 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build backend
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/backend/Dockerfile
+          tags: cleandata-backend:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/backend.tar
+
+      - name: Build nginx
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/nginx/Dockerfile
+          tags: cleandata-nginx:${{ github.sha }}
+          outputs: type=docker,dest=/tmp/nginx.tar
+
+      - name: Upload backend image
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleandata-backend-${{ github.sha }}
+          path: /tmp/backend.tar
+          retention-days: 14
+
+      - name: Upload nginx image
+        uses: actions/upload-artifact@v4
+        with:
+          name: cleandata-nginx-${{ github.sha }}
+          path: /tmp/nginx.tar
+          retention-days: 14

@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+__pycache__
+*.pyc
+backend/jobs/
+backend/__pycache__
+backend/**/__pycache__
+backend/.env
+backend/global-bundle.pem
+.vscode
+.idea
+*.log
+context_dump.md
