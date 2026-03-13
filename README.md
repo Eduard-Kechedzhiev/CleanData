@@ -136,8 +136,8 @@ The Vite dev server proxies `/api/*` to `localhost:8000` automatically.
 - [ ] Set up persistent EFS or EBS volume for `/app/jobs` data
 
 ### Backend
+- [ ] **Replace filesystem job store with a database.** Currently job state, pipeline progress, and uploaded files are stored on the local filesystem (`/app/jobs`). This works for a single Fargate task but breaks if we ever need multiple instances behind a load balancer — requests could hit a node that doesn't have the job. Moving to DynamoDB (job metadata + state) + S3 (uploaded files + results) would decouple state from the container and make horizontal scaling possible later
 - [ ] Wire up rep notification on lead capture (currently logs only — see `_notify_rep()` in `job_service.py`). Options: Slack webhook, SES email, or a DB-backed queue
-- [ ] Move job storage from local filesystem to S3 or EFS for durability
 - [ ] Add rate limiting on upload endpoint
 - [ ] Set up structured logging export (CloudWatch / Datadog)
 
