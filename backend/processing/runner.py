@@ -17,10 +17,10 @@ def run_pipeline(input_path: Path, output_path: Path, reporter: ProgressReporter
         brand_col=None,
         packsize_col=None,
         chunk_size=100,
-        workers=4,
+        workers=20,
         fail_fast=True,
         json_logs=False,
-        cleaning_batch_size=10,
+        cleaning_batch_size=20,
         enable_perplexity_fallback=True,
         progress_reporter=reporter,
     )

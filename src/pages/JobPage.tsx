@@ -157,6 +157,7 @@ type Phase = "loading" | "processing" | "complete" | "failed";
 type FailureKind = "job_not_found" | "processing_failed";
 
 const POLL_INTERVAL_MS = 5000;
+const MAX_POLL_ERRORS = 30; // ~2.5 min of consecutive failures
 
 const JobPage = () => {
   const { jobId } = useParams<{ jobId: string }>();
@@ -190,6 +191,7 @@ const JobPage = () => {
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const pollingTimeoutRef = useRef<number | null>(null);
+  const pollErrorCountRef = useRef(0);
   const activeRunRef = useRef(0);
 
   const closeEventSource = useCallback(() => {
@@ -301,6 +303,7 @@ const JobPage = () => {
       try {
         const polledStatus = await getJobStatus(targetJobId);
         if (!isActiveRun(runId)) return;
+        pollErrorCountRef.current = 0;
         await handleStatusUpdate(polledStatus, runId);
         if (!isActiveRun(runId)) return;
         if (!isCompletedState(polledStatus.state) && polledStatus.state !== "failed") {
@@ -314,6 +317,11 @@ const JobPage = () => {
         }
         if (err instanceof ApiRequestError && !err.retryable) {
           failJobFlow("processing_failed", err.message);
+          return;
+        }
+        pollErrorCountRef.current += 1;
+        if (pollErrorCountRef.current >= MAX_POLL_ERRORS) {
+          failJobFlow("processing_failed", "Lost connection to server. Please refresh the page.");
           return;
         }
         pollingTimeoutRef.current = window.setTimeout(pollOnce, POLL_INTERVAL_MS);
@@ -782,7 +790,7 @@ const JobPage = () => {
 
   const summaryStats = [
     { label: "Products processed", value: summary.row_count.toLocaleString(), sub: null, highlight: false },
-    { label: "Avg quality score", value: summary.avg_quality_score?.toFixed(1) ?? "N/A", sub: summary.avg_quality_score ? "/ 10" : null, highlight: true },
+    { label: "Avg quality score", value: summary.avg_quality_score?.toFixed(1) ?? "N/A", sub: summary.avg_quality_score != null ? "/ 10" : null, highlight: true },
     { label: "Brands extracted", value: summary.brands_extracted.toLocaleString(), sub: "unique", highlight: false },
     { label: "GTINs validated", value: `${summary.gtins_found.toLocaleString()} / ${summary.gtins_total.toLocaleString()}`, sub: `${gtinPercent}%`, highlight: false },
   ];

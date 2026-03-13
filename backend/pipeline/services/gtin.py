@@ -104,7 +104,7 @@ def _auto_detect_gtin_column(df: pd.DataFrame) -> str:
             total += 1
             if clean and clean.isdigit() and 8 <= len(clean) <= 14:
                 gtin_like += 1
-        if total > 0:
+        if total >= 10:
             score = gtin_like / total
             if score > best_score and score > 0.3:
                 best_score = score

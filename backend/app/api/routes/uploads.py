@@ -15,7 +15,18 @@ async def upload_csv(file: UploadFile = File(...)):
         raise ApiError(400, "invalid_request", "No file provided")
 
     try:
-        content = await file.read()
+        # Read in chunks to reject oversized files without loading them fully into memory.
+        # In production nginx client_max_body_size rejects them first, but this protects local dev.
+        max_bytes = settings.max_upload_bytes
+        chunks: list[bytes] = []
+        total = 0
+        while chunk := await file.read(1024 * 1024):
+            total += len(chunk)
+            if total > max_bytes:
+                raise ValueError(f"File exceeds {max_bytes // (1024 * 1024)}MB limit.")
+            chunks.append(chunk)
+        content = b"".join(chunks)
+
         return upload_file(
             file_name=file.filename,
             content=content,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Callable, Dict, List, Sequence, Tuple
 
@@ -97,7 +98,7 @@ class TaxonomyHierarchyValidator:
         if not c3:
             return canonical_l1, canonical_l2, "", True
 
-        l3_key = (c1_key, canonical_l2.casefold(), c3.casefold())
+        l3_key = (c1_key, c2.casefold(), c3.casefold())
         canonical_l3 = self.level3.get(l3_key)
         if not canonical_l3:
             return "", "", "", False
@@ -107,6 +108,8 @@ class TaxonomyHierarchyValidator:
 
 class TaxonomyService:
     """External-only taxonomy classification over cleaned fields."""
+
+    MAX_CONCURRENT_BATCHES = 5
 
     def __init__(
         self,
@@ -178,6 +181,9 @@ class TaxonomyService:
                         "subsubcategory": raw_subsubcategory,
                     },
                 )
+                out.at[row_idx, "gtin_category"] = raw_category
+                out.at[row_idx, "gtin_subcategory"] = raw_subcategory
+                out.at[row_idx, "gtin_subsubcategory"] = raw_subsubcategory
                 continue
 
             out.at[row_idx, "gtin_category"] = category
@@ -197,22 +203,35 @@ class TaxonomyService:
             return out
 
         skipped_rows = len(out) - len(items)
+        total_batches = (len(items) + self.batch_size - 1) // self.batch_size
+
+        # Build batch specs: [(start, end), ...]
+        batch_specs = []
+        for start in range(0, len(items), self.batch_size):
+            end = min(start + self.batch_size, len(items))
+            batch_specs.append((start, end))
+
         try:
-            for start in range(0, len(items), self.batch_size):
-                end = min(start + self.batch_size, len(items))
-                batch_items = items[start:end]
-                batch_row_indices = row_indices[start:end]
-                batch_results = self.provider.categorize(batch_items)
-                self._apply_batch(out, batch_row_indices, batch_results)
-                if self.progress_callback:
-                    batch_num = (start // self.batch_size) + 1
-                    total_batches = (len(items) + self.batch_size - 1) // self.batch_size
-                    completed_rows = skipped_rows + end
-                    self.progress_callback(
-                        completed_rows,
-                        len(out),
-                        f"Processed batch {batch_num}/{total_batches}",
-                    )
+            completed_batches = 0
+
+            def _run_batch(spec: Tuple[int, int]) -> Tuple[int, int, List[TaxonomyResponseItem]]:
+                s, e = spec
+                return s, e, self.provider.categorize(items[s:e])
+
+            with ThreadPoolExecutor(max_workers=self.MAX_CONCURRENT_BATCHES) as pool:
+                futures = {pool.submit(_run_batch, spec): spec for spec in batch_specs}
+                for future in as_completed(futures):
+                    start, end, batch_results = future.result()
+                    batch_row_indices = row_indices[start:end]
+                    self._apply_batch(out, batch_row_indices, batch_results)
+                    completed_batches += 1
+                    if self.progress_callback:
+                        completed_rows = skipped_rows + min(completed_batches * self.batch_size, len(items))
+                        self.progress_callback(
+                            completed_rows,
+                            len(out),
+                            f"Processed batch {completed_batches}/{total_batches}",
+                        )
         except Exception as exc:
             raise StageError(f"Taxonomy stage failed: {exc}") from exc
 

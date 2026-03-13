@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import csv
 import hashlib
 import json
 import logging
@@ -1174,10 +1175,14 @@ Return ONLY valid JSON:
         clarity_ratings[position] = clarity_rating
         clarity_categories[position] = clarity_category
         if stream_file is not None:
-            pd.DataFrame([stream_row], columns=stream_columns).to_csv(
-                stream_file, index=False, header=False,
-            )
-            stream_file.flush()
+            if not hasattr(stream_file, '_csv_writer'):
+                stream_file._csv_writer = csv.writer(stream_file)
+            stream_file._csv_writer.writerow([stream_row.get(col, "") for col in stream_columns])
+            if not hasattr(stream_file, '_csv_row_count'):
+                stream_file._csv_row_count = 0
+            stream_file._csv_row_count += 1
+            if stream_file._csv_row_count % 50 == 0:
+                stream_file.flush()
 
     async def _run_async(
         self,
@@ -1194,7 +1199,7 @@ Return ONLY valid JSON:
         clarity_categories: List[str],
         stream_file: Any,
         stream_columns: List[str],
-    ) -> None:
+    ) -> int:
         """Batched async processing — N items per API call with individual retry fallback."""
         semaphore = asyncio.Semaphore(self.workers)
         positions_to_process = [pos for pos in range(row_count) if pos not in completed_positions]
