@@ -13,8 +13,27 @@ import type { JobEventEnvelope, JobStatus, JobSummary } from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
 const DISTRIBUTOR_TYPES = [
-  "Broadline Distributor",
-  "Specialty Distributor",
+  "Bakery",
+  "Beverage",
+  "Broadline",
+  "Coffee",
+  "Ice Cream",
+  "C-Store",
+  "Jan-San",
+  "Meat",
+  "Produce",
+  "Seafood",
+  "Specialty",
+  "Alcohol",
+  "Floral",
+  "Dairy",
+  "Vegan/Organic/Natural",
+  "Grocery",
+  "Other - Food",
+  "Other - Non Food",
+  "Retail",
+  "Restaurant Equipment and Supply",
+  "Other",
 ];
 
 /* ------------------------------------------------------------------ */

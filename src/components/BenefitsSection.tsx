@@ -1,41 +1,70 @@
-import { Sparkles, Tag, BarChart3, FolderTree } from "lucide-react";
+import { Sparkles, Tag, BarChart3, FolderTree, ScanBarcode, Zap, type LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 
-const benefits = [
+interface BenefitItem {
+  icon: LucideIcon;
+  title: string;
+  desc: string;
+  span: 1 | 2;
+  accent: string;
+  iconBg: string;
+  iconColor: string;
+}
+
+const benefits: BenefitItem[] = [
   {
     icon: Sparkles,
-    title: "Standardized product names",
-    desc: "Messy abbreviations become clean, readable entries.",
+    title: "Standardized names",
+    desc: "Cryptic abbreviations become clean, readable product names.",
+    span: 2,
+    accent: "border-l-emerald-400/60",
+    iconBg: "bg-emerald-50 dark:bg-emerald-950/30",
+    iconColor: "text-emerald-600 dark:text-emerald-400",
   },
   {
     icon: Tag,
-    title: "Brand & pack size extraction",
-    desc: "Buried metadata surfaced automatically from any format.",
+    title: "Brand & pack extraction",
+    desc: "Buried metadata surfaced from any format.",
+    span: 1,
+    accent: "border-l-blue-400/60",
+    iconBg: "bg-blue-50 dark:bg-blue-950/30",
+    iconColor: "text-blue-600 dark:text-blue-400",
   },
   {
     icon: BarChart3,
     title: "Quality scored",
-    desc: "Every row rated 0–10 so you know where to focus.",
+    desc: "Every row rated 0\u201310 so you know where to focus.",
+    span: 1,
+    accent: "border-l-amber-400/60",
+    iconBg: "bg-amber-50 dark:bg-amber-950/30",
+    iconColor: "text-amber-600 dark:text-amber-400",
   },
   {
     icon: FolderTree,
     title: "Category taxonomy",
-    desc: "Consistent 3-level product categorization applied.",
-  },
-];
-
-const beforeAfterRows = [
-  {
-    product: { before: "PORK LOINS BONELESS CENTER CUT REF", after: "Pork Loins Boneless Center Cut Refrigerated" },
-    brand: { before: "(buried in desc)", after: "Hatfield" },
-    pack: { before: "(encoded)", after: "5 x 8 LB" },
-    score: { before: "—", after: "9/10" },
+    desc: "Consistent 3-level categorization across your entire catalog.",
+    span: 2,
+    accent: "border-l-violet-400/60",
+    iconBg: "bg-violet-50 dark:bg-violet-950/30",
+    iconColor: "text-violet-600 dark:text-violet-400",
   },
   {
-    product: { before: "CHKN BRST BNLS SKNLS FRZ 4OZ", after: "Chicken Breast Boneless Skinless Frozen 4oz" },
-    brand: { before: "(missing)", after: "Tyson" },
-    pack: { before: "(unclear)", after: "2 x 10 LB" },
-    score: { before: "—", after: "8/10" },
+    icon: ScanBarcode,
+    title: "GTIN enrichment",
+    desc: "Barcodes validated against global product databases.",
+    span: 2,
+    accent: "border-l-rose-400/60",
+    iconBg: "bg-rose-50 dark:bg-rose-950/30",
+    iconColor: "text-rose-600 dark:text-rose-400",
+  },
+  {
+    icon: Zap,
+    title: "Minutes, not weeks",
+    desc: "Thousands of products in one run.",
+    span: 1,
+    accent: "border-l-cyan-400/60",
+    iconBg: "bg-cyan-50 dark:bg-cyan-950/30",
+    iconColor: "text-cyan-600 dark:text-cyan-400",
   },
 ];
 
@@ -47,7 +76,7 @@ const BenefitsSection = () => {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-14"
+          className="text-center mb-12"
         >
           <h2 className="font-heading text-3xl md:text-4xl font-bold text-foreground">
             What you get
@@ -57,66 +86,30 @@ const BenefitsSection = () => {
           </p>
         </motion.div>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-16">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {benefits.map((b, i) => (
             <motion.div
               key={b.title}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              transition={{ delay: i * 0.1 }}
-              className="bg-card border border-border rounded-xl p-6 hover:shadow-lg hover:border-primary/20 transition-all duration-300"
+              transition={{ delay: i * 0.06 }}
+              className={`bg-card border border-border ${b.accent} border-l-[3px] rounded-lg px-4 py-3.5 hover:shadow-md transition-all duration-300 ${
+                b.span === 2 ? "sm:col-span-2 lg:col-span-2" : ""
+              }`}
             >
-              <div className="w-10 h-10 rounded-lg bg-accent flex items-center justify-center mb-4">
-                <b.icon className="w-5 h-5 text-accent-foreground" />
+              <div className="flex items-start gap-3">
+                <div className={`w-8 h-8 shrink-0 rounded-md ${b.iconBg} flex items-center justify-center`}>
+                  <b.icon className={`w-4 h-4 ${b.iconColor}`} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="font-heading text-sm font-semibold text-foreground">{b.title}</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{b.desc}</p>
+                </div>
               </div>
-              <h3 className="font-heading font-semibold text-foreground mb-1">{b.title}</h3>
-              <p className="text-sm text-muted-foreground">{b.desc}</p>
             </motion.div>
           ))}
         </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="max-w-4xl mx-auto"
-        >
-          <h3 className="font-heading text-xl font-semibold text-foreground text-center mb-6">
-            Before → After
-          </h3>
-          <div className="overflow-x-auto rounded-xl border border-border bg-card">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Field</th>
-                  <th className="text-left px-4 py-3 font-medium text-destructive/70">Before</th>
-                  <th className="text-left px-4 py-3 font-medium text-primary">After</th>
-                </tr>
-              </thead>
-              <tbody>
-                {beforeAfterRows.map((row, i) => {
-                  const fields = [
-                    { label: "Product Name", ...row.product },
-                    { label: "Brand", ...row.brand },
-                    { label: "Pack/Size", ...row.pack },
-                    { label: "Quality", ...row.score },
-                  ];
-                  return fields.map((cell, j) => (
-                    <tr
-                      key={`${i}-${j}`}
-                      className={`border-b border-border/50 last:border-0 ${j === 0 && i > 0 ? "border-t-2 border-t-muted" : ""}`}
-                    >
-                      <td className="px-4 py-2.5 font-medium text-foreground">{cell.label}</td>
-                      <td className="px-4 py-2.5 text-muted-foreground font-mono text-xs">{cell.before}</td>
-                      <td className="px-4 py-2.5 text-foreground font-medium">{cell.after}</td>
-                    </tr>
-                  ));
-                })}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
       </div>
     </section>
   );

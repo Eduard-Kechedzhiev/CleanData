@@ -28,13 +28,13 @@ const scoreColor = (s: number) =>
 
 const SampleResults = ({ onTrySample }: SampleResultsProps) => {
   return (
-    <section id="sample-results" className="py-20 lg:py-28 bg-background">
+    <section id="sample-results" className="py-20 lg:py-28 bg-muted/30">
       <div className="container mx-auto px-4">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-12"
+          className="text-center mb-10"
         >
           <h2 className="font-heading text-3xl md:text-4xl font-bold text-foreground">
             See it in action
@@ -44,13 +44,13 @@ const SampleResults = ({ onTrySample }: SampleResultsProps) => {
           </p>
         </motion.div>
 
-        {/* Sample table */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="max-w-4xl mx-auto mb-10"
+          className="max-w-6xl mx-auto grid lg:grid-cols-[1fr_340px] gap-6 items-stretch mb-8"
         >
+          {/* Table */}
           <div className="overflow-x-auto rounded-xl border border-border bg-card">
             <table className="w-full text-sm">
               <thead>
@@ -73,30 +73,41 @@ const SampleResults = ({ onTrySample }: SampleResultsProps) => {
               </tbody>
             </table>
           </div>
-        </motion.div>
 
-        {/* Chart */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="max-w-xl mx-auto bg-card border border-border rounded-xl p-6 mb-8"
-        >
-          <h3 className="font-heading font-semibold text-foreground mb-4 text-center">Quality Score Distribution</h3>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={scoreDistribution}>
-              <XAxis dataKey="score" tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 12, fill: "hsl(var(--muted-foreground))" }} axisLine={false} tickLine={false} />
-              <Tooltip
-                contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 13 }}
-              />
-              <Bar dataKey="count" radius={[6, 6, 0, 0]}>
-                {scoreDistribution.map((entry, i) => (
-                  <Cell key={i} fill={entry.color} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+          {/* Chart */}
+          <div className="bg-card border border-border rounded-xl p-5 flex flex-col">
+            <h3 className="font-heading font-semibold text-foreground mb-3 text-center text-sm">
+              Quality Score Distribution
+            </h3>
+            <ResponsiveContainer width="100%" className="flex-1" height="100%">
+              <BarChart data={scoreDistribution}>
+                <XAxis
+                  dataKey="score"
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  contentStyle={{
+                    background: "hsl(var(--card))",
+                    border: "1px solid hsl(var(--border))",
+                    borderRadius: 8,
+                    fontSize: 13,
+                  }}
+                />
+                <Bar dataKey="count" radius={[6, 6, 0, 0]}>
+                  {scoreDistribution.map((entry, i) => (
+                    <Cell key={i} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </motion.div>
 
         <div className="text-center">

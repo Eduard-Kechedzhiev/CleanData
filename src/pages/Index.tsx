@@ -2,9 +2,7 @@ import { useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
-import TrustBar from "@/components/TrustBar";
 import BenefitsSection from "@/components/BenefitsSection";
-import HowItWorks from "@/components/HowItWorks";
 import SampleResults from "@/components/SampleResults";
 import BenchmarksSection from "@/components/BenchmarksSection";
 import FAQSection from "@/components/FAQSection";
@@ -41,9 +39,7 @@ const Index = () => {
     <div className="min-h-screen">
       <Navbar />
       <HeroSection onUpload={handleUpload} onSampleData={handleSampleData} uploading={uploading} />
-      <TrustBar />
       <BenefitsSection />
-      <HowItWorks />
       <SampleResults onTrySample={() => window.scrollTo({ top: 0, behavior: "smooth" })} />
       <BenchmarksSection />
       <FAQSection />
