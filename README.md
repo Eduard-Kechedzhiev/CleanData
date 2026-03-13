@@ -129,24 +129,11 @@ The Vite dev server proxies `/api/*` to `localhost:8000` automatically.
 ## TODOs before production deployment
 
 ### Infrastructure
-- [ ] Set up AWS infrastructure (Terraform in `infra/`)
-- [ ] Configure ECS Fargate task definition (single task, no horizontal scaling needed for now)
-- [ ] Set up ALB with HTTPS/TLS certificate
-- [ ] Configure custom domain + DNS
 - [ ] Set up persistent EFS or EBS volume for `/app/jobs` data
 
 ### Backend
 - [ ] **Replace filesystem job store with a database.** Currently job state, pipeline progress, and uploaded files are stored on the local filesystem (`/app/jobs`). This works for a single Fargate task but breaks if we ever need multiple instances behind a load balancer — requests could hit a node that doesn't have the job. Moving to DynamoDB (job metadata + state) + S3 (uploaded files + results) would decouple state from the container and make horizontal scaling possible later
-- [ ] Wire up rep notification on lead capture (currently logs only — see `_notify_rep()` in `job_service.py`). Options: Slack webhook, SES email, or a DB-backed queue
-- [ ] Add rate limiting on upload endpoint
-- [ ] Set up structured logging export (CloudWatch / Datadog)
+- [ ] Wire up rep notification on lead capture (currently logs only — see `_notify_rep()` in `job_service.py`).
 
 ### CI/CD
 - [ ] Complete `deploy.yml` — push images to ECR and trigger ECS deployment
-- [ ] Add staging environment
-- [ ] Add health check monitoring / alerting
-
-### Frontend
-- [ ] Add error boundary for unhandled React errors
-- [ ] Add analytics (PostHog, Mixpanel, or similar)
-- [ ] Consider code-splitting for bundle size (currently ~250KB gzip)
