@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional
 
@@ -35,11 +35,6 @@ class StageState(str, Enum):
     failed = "failed"
 
 
-class DownloadState(str, Enum):
-    locked = "locked"
-    expired = "expired"
-
-
 class StageCounts(BaseModel):
     completed: int = 0
     total: int = 0
@@ -63,12 +58,6 @@ class StageSnapshot(BaseModel):
     error: Optional[str] = None
 
 
-class DownloadSnapshot(BaseModel):
-    state: DownloadState = DownloadState.locked
-    requires_lead_capture: bool = True
-    expires_at: Optional[str] = None
-
-
 class PipelineSnapshot(BaseModel):
     current_stage: Optional[str] = None
     percent: float = 0.0
@@ -87,7 +76,6 @@ class JobSnapshot(BaseModel):
     created_at: str
     started_at: Optional[str] = None
     completed_at: Optional[str] = None
-    download: DownloadSnapshot
     summary: JobSummaryMeta
     pipeline: PipelineSnapshot
     failure: Optional[FailureInfo] = None
@@ -108,9 +96,9 @@ class JobRecord(BaseModel):
     ))
     failure: Optional[FailureInfo] = None
     warnings: List[FailureInfo] = Field(default_factory=list)
-    download_tokens: List[str] = Field(default_factory=list)
     lead_email: Optional[str] = None
     lead_company: str = ""
+    lead_distributor_type: str = ""
     sequence: int = 0
 
     def stage_by_name(self, stage_name: str) -> StageSnapshot:
@@ -153,37 +141,13 @@ class JobRecord(BaseModel):
         self.pipeline.current_stage = running_stage
         self.pipeline.percent = round(total_weighted, 1)
 
-    def to_snapshot(self, ttl_hours: int, now: Optional[datetime] = None) -> JobSnapshot:
-        now_dt = now or datetime.now(timezone.utc)
-
-        expires_at = None
-        if self.completed_at:
-            try:
-                expires_at = (
-                    datetime.fromisoformat(self.completed_at) + timedelta(hours=ttl_hours)
-                ).isoformat()
-            except Exception:
-                expires_at = None
-
-        download_state = DownloadState.locked
-        if expires_at:
-            try:
-                if datetime.fromisoformat(expires_at) <= now_dt:
-                    download_state = DownloadState.expired
-            except Exception:
-                download_state = DownloadState.locked
-
+    def to_snapshot(self) -> JobSnapshot:
         return JobSnapshot(
             job_id=self.job_id,
             state=self.state,
             created_at=self.created_at,
             started_at=self.started_at,
             completed_at=self.completed_at,
-            download=DownloadSnapshot(
-                state=download_state,
-                requires_lead_capture=True,
-                expires_at=expires_at,
-            ),
             summary=JobSummaryMeta(
                 row_count=self.row_count,
                 input_filename=self.input_filename,
@@ -211,6 +175,7 @@ class JobSummary(BaseModel):
 class EmailCapture(BaseModel):
     email: str
     company: str = ""
+    distributor_type: str = ""
 
     @field_validator("email")
     @classmethod

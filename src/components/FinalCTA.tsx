@@ -23,7 +23,7 @@ const FinalCTA = () => {
             Ready to see what's in your catalog?
           </h2>
           <p className="text-hero-muted text-lg mb-8 max-w-md mx-auto">
-            Upload your CSV and get a cleaned, scored catalog in minutes. Completely free.
+            Upload your CSV and get a full catalog analysis in minutes. Completely free.
           </p>
           <Button
             variant="cta-dark"

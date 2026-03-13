@@ -2,27 +2,21 @@ from __future__ import annotations
 
 import asyncio
 import json
-import re
 from pathlib import Path
 
-from fastapi import APIRouter, Query
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 
 from app.api.errors import ApiError
 from app.domain.job_models import JobEventEnvelope, JobState
 from app.infrastructure import job_store
 from app.services import results_service
-from app.services.job_service import get_download_path, get_job_snapshot
+from app.services.job_service import get_job_snapshot
 from app.settings import settings
 
 router = APIRouter()
 
-_SAFE_FILENAME_RE = re.compile(r"[^a-zA-Z0-9._-]")
 _SAMPLE_RESULTS_PATH = Path(__file__).resolve().parents[3] / "sample_results.json"
-
-
-def _sanitize_filename(name: str) -> str:
-    return _SAFE_FILENAME_RE.sub("_", name)
 
 
 def _validate_job_id(job_id: str) -> None:
@@ -34,7 +28,7 @@ def _validate_job_id(job_id: str) -> None:
 async def get_job_status(job_id: str):
     _validate_job_id(job_id)
     try:
-        return get_job_snapshot(job_id, settings.job_ttl_hours)
+        return get_job_snapshot(job_id)
     except FileNotFoundError as exc:
         raise ApiError(404, "job_not_found", str(exc)) from exc
 
@@ -59,7 +53,7 @@ async def stream_job_status(job_id: str):
                 return
 
             if record.sequence != last_sequence:
-                snapshot = record.to_snapshot(settings.job_ttl_hours)
+                snapshot = record.to_snapshot()
                 envelope = JobEventEnvelope.updated(sequence=record.sequence, job=snapshot)
                 yield f"data: {envelope.model_dump_json()}\n\n"
                 last_sequence = record.sequence
@@ -92,9 +86,6 @@ async def get_job_results(job_id: str):
     record = job_store.load_job(job_id)
     if not record:
         raise ApiError(404, "job_not_found", "Job not found")
-    snapshot = record.to_snapshot(settings.job_ttl_hours)
-    if snapshot.download.state.value == "expired":
-        raise ApiError(410, "results_expired", "Results have expired. Upload again to regenerate them.")
     if record.state not in {JobState.completed, JobState.completed_with_warnings}:
         raise ApiError(
             400,
@@ -111,28 +102,6 @@ async def get_job_results(job_id: str):
         return results_service.compute_summary(job_id, output_file)
     except Exception as exc:
         raise ApiError(500, "internal_error", "Failed to compute results", retryable=True) from exc
-
-
-@router.get("/api/jobs/{job_id}/download")
-async def download_results(job_id: str, token: str = Query(..., description="Download token from email submission")):
-    _validate_job_id(job_id)
-    try:
-        path, input_filename = get_download_path(job_id, token, settings.job_ttl_hours)
-    except FileNotFoundError as exc:
-        raise ApiError(404, "job_not_found", str(exc)) from exc
-    except PermissionError as exc:
-        raise ApiError(403, "download_forbidden", str(exc)) from exc
-    except ValueError as exc:
-        raise ApiError(400, "job_not_complete", str(exc)) from exc
-    except RuntimeError as exc:
-        if str(exc) == "Results have expired":
-            raise ApiError(410, "results_expired", str(exc)) from exc
-        raise ApiError(500, "artifact_missing", str(exc)) from exc
-
-    safe_name = _sanitize_filename(f"cleandata_{input_filename}")
-    if not safe_name.endswith(".csv"):
-        safe_name += ".csv"
-    return FileResponse(path=path, filename=safe_name, media_type="text/csv")
 
 
 @router.get("/api/config")

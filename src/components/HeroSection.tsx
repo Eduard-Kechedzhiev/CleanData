@@ -37,7 +37,7 @@ const HeroSection = ({ onUpload, onSampleData, uploading }: HeroSectionProps) =>
             transition={{ duration: 0.6, delay: 0.15 }}
             className="mt-5 text-lg md:text-xl text-hero-muted max-w-xl mx-auto text-balance"
           >
-            Upload your CSV. Get a cleaned, enriched catalog with quality scores, brand extraction, and category taxonomy — free.
+            Upload your CSV and get a full catalog analysis with quality scores, brand extraction, and category taxonomy — free.
           </motion.p>
 
           <motion.div

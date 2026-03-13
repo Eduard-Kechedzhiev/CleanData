@@ -4,7 +4,7 @@ interface StepperProps {
   currentStep: number; // 1-4
 }
 
-const steps = ["Upload", "Processing", "Results Preview", "Full Report"];
+const steps = ["Upload", "Processing", "Results"];
 
 const Stepper = ({ currentStep }: StepperProps) => {
   return (

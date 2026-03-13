@@ -4,7 +4,6 @@ import json
 import logging
 import os
 import re
-import secrets
 import shutil
 import threading
 import time
@@ -57,7 +56,7 @@ class _LegacyJobStatus(BaseModel):
     completed_at: Optional[str] = None
     error: Optional[str] = None
     email: Optional[str] = None
-    download_tokens: list[str] = Field(default_factory=list)
+    download_tokens: list[str] = Field(default_factory=list)  # legacy compat
 
 
 def validate_job_id(job_id: str) -> bool:
@@ -120,7 +119,6 @@ def _load_legacy_job(text: str) -> Optional[JobRecord]:
         completed_at=legacy.completed_at,
         input_filename=legacy.file_name,
         row_count=legacy.row_count,
-        download_tokens=list(legacy.download_tokens),
         lead_email=legacy.email,
     )
 
@@ -179,11 +177,11 @@ def load_job(job_id: str) -> Optional[JobRecord]:
         return None
 
 
-def load_snapshot(job_id: str, ttl_hours: int) -> Optional[JobSnapshot]:
+def load_snapshot(job_id: str) -> Optional[JobSnapshot]:
     record = load_job(job_id)
     if not record:
         return None
-    return record.to_snapshot(ttl_hours)
+    return record.to_snapshot()
 
 
 def _mutate(job_id: str, mutator: Callable[[JobRecord], None]) -> Optional[JobRecord]:
@@ -390,22 +388,21 @@ def mark_complete(job_id: str) -> Optional[JobRecord]:
     return _mutate(job_id, _apply)
 
 
-def set_email(job_id: str, email: str, company: str = "", grant_download: bool = False) -> str | None:
-    token = secrets.token_urlsafe(24) if grant_download else None
-
+def save_lead(job_id: str, email: str, company: str = "", distributor_type: str = "") -> bool:
+    """Persist lead info on the job record and append to the leads log."""
     def _apply(record: JobRecord) -> None:
         record.lead_email = email
         record.lead_company = company
-        if token:
-            record.download_tokens.append(token)
+        record.lead_distributor_type = distributor_type
 
     record = _mutate(job_id, _apply)
     if not record:
-        return None
+        return False
 
     lead = {
         "email": email,
         "company": company,
+        "distributor_type": distributor_type,
         "job_id": job_id,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -414,14 +411,7 @@ def set_email(job_id: str, email: str, company: str = "", grant_download: bool =
         with open(LEADS_PATH, "a", encoding="utf-8") as handle:
             handle.write(json.dumps(lead) + "\n")
 
-    return token
-
-
-def validate_download_token(job_id: str, token: str) -> bool:
-    record = load_job(job_id)
-    if not record:
-        return False
-    return token in record.download_tokens
+    return True
 
 
 def input_path(job_id: str, ext: str = ".csv") -> Path:

@@ -1,44 +1,21 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useParams, useNavigate } from "react-router-dom";
 import {
-  Check, Loader2, Mail, AlertCircle, Download, Lock, MessageSquare, Link2,
+  Check, Loader2, Mail, AlertCircle, MessageSquare, Link2, ChevronDown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Stepper from "@/components/Stepper";
-import { useContactEmail } from "@/hooks/use-contact-email";
 import { motion } from "framer-motion";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
-import { ApiRequestError, downloadResults, getJobResults, getJobStatus, submitEmail } from "@/lib/api";
-import type { ApiErrorPayload, JobEventEnvelope, JobStatus, JobSummary } from "@/lib/api";
+import { ApiRequestError, getJobResults, getJobStatus, submitEmail } from "@/lib/api";
+import type { JobEventEnvelope, JobStatus, JobSummary } from "@/lib/api";
 
 /* ------------------------------------------------------------------ */
-/*  Download token helpers (per-requester, stored in localStorage)      */
-/* ------------------------------------------------------------------ */
-
-function getStoredToken(jobId: string): string | null {
-  try {
-    return localStorage.getItem(`cleandata_dl_${jobId}`);
-  } catch {
-    return null;
-  }
-}
-
-function storeToken(jobId: string, token: string): void {
-  try {
-    localStorage.setItem(`cleandata_dl_${jobId}`, token);
-  } catch {
-    // localStorage may be unavailable (private browsing, etc.)
-  }
-}
-
-function clearStoredToken(jobId: string): void {
-  try {
-    localStorage.removeItem(`cleandata_dl_${jobId}`);
-  } catch {
-    // localStorage may be unavailable (private browsing, etc.)
-  }
-}
+const DISTRIBUTOR_TYPES = [
+  "Broadline Distributor",
+  "Specialty Distributor",
+];
 
 /* ------------------------------------------------------------------ */
 /*  Stage definitions & progress computation                          */
@@ -47,15 +24,22 @@ function clearStoredToken(jobId: string): void {
 const UI_STAGES = [
   { label: "Reading your catalog...", showCount: false },
   { label: "Cleaning names, brands & quality scores...", showCount: true },
-  { label: "Assigning product categories...", showCount: false },
-  { label: "Validating GTINs...", showCount: false },
+  { label: "Assigning product categories...", showCount: true },
+  { label: "Validating GTINs...", showCount: true },
 ];
+
+const BACKEND_TO_UI_STAGE: Record<string, number> = {
+  reading: 0,
+  cleaning: 1,
+  taxonomy: 2,
+  gtin: 3,
+};
 
 function computeVisualStage(status: JobStatus) {
   if (status.state === "queued") {
     return { stageIndex: 0, rowsDone: 0, rowsTotal: status.summary.row_count };
   }
-  if (status.state === "completed" || status.state === "completed_with_warnings") {
+  if (isCompletedState(status.state)) {
     return {
       stageIndex: UI_STAGES.length,
       rowsDone: status.summary.row_count,
@@ -63,19 +47,12 @@ function computeVisualStage(status: JobStatus) {
     };
   }
 
-  const stageMap: Record<string, number> = {
-    reading: 0,
-    cleaning: 1,
-    taxonomy: 2,
-    gtin: 3,
-  };
-
   let stageIndex = 0;
   let rowsDone = 0;
   let rowsTotal = status.summary.row_count;
 
   for (const stage of status.pipeline.stages) {
-    const mapped = stageMap[stage.name];
+    const mapped = BACKEND_TO_UI_STAGE[stage.name];
     if (mapped === undefined) continue;
 
     if (stage.state === "running" || stage.state === "failed") {
@@ -84,7 +61,7 @@ function computeVisualStage(status: JobStatus) {
     if (stage.state === "completed" || stage.state === "skipped") {
       if (mapped + 1 > stageIndex) stageIndex = mapped + 1;
     }
-    if (stage.name === "cleaning" && stage.state === "running") {
+    if (stage.state === "running") {
       rowsDone = stage.counts.completed;
       rowsTotal = stage.counts.total || status.summary.row_count;
     }
@@ -95,7 +72,7 @@ function computeVisualStage(status: JobStatus) {
 
 function computeProgress(status: JobStatus | null): number {
   if (!status) return 0;
-  if (status.state === "completed" || status.state === "completed_with_warnings") return 100;
+  if (isCompletedState(status.state)) return 100;
   return status.pipeline.percent;
 }
 
@@ -129,10 +106,11 @@ function isDeletedEnvelope(payload: unknown): payload is Extract<JobEventEnvelop
 
 function getSseErrorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== "object" || !("error" in payload)) return null;
-  const error = (payload as { error: string | ApiErrorPayload }).error;
-  if (typeof error === "string") return error;
-  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") {
-    return error.message;
+  const rec = payload as Record<string, unknown>;
+  if (typeof rec.error === "string") return rec.error;
+  if (rec.error && typeof rec.error === "object") {
+    const nested = rec.error as Record<string, unknown>;
+    if (typeof nested.message === "string") return nested.message;
   }
   return "Request failed";
 }
@@ -140,6 +118,9 @@ function getSseErrorMessage(payload: unknown): string | null {
 /* ------------------------------------------------------------------ */
 /*  Chart colors                                                       */
 /* ------------------------------------------------------------------ */
+
+const scoreColor = (s: number) =>
+  s >= 8 ? "text-score-excellent" : s >= 5 ? "text-score-good" : "text-score-poor";
 
 const SCORE_COLORS: Record<string, string> = {
   "1-2": "hsl(var(--score-poor))",
@@ -162,7 +143,6 @@ const MAX_POLL_ERRORS = 30; // ~2.5 min of consecutive failures
 const JobPage = () => {
   const { jobId } = useParams<{ jobId: string }>();
   const navigate = useNavigate();
-  const contactEmail = useContactEmail();
 
   const [phase, setPhase] = useState<Phase>("loading");
   const [status, setStatus] = useState<JobStatus | null>(null);
@@ -171,23 +151,18 @@ const JobPage = () => {
   const [failureKind, setFailureKind] = useState<FailureKind>("processing_failed");
   const [isPollingFallback, setIsPollingFallback] = useState(false);
 
-  // Per-requester download token (from email submission)
-  const [downloadToken, setDownloadToken] = useState<string | null>(() =>
-    jobId ? getStoredToken(jobId) : null
-  );
-
   // Email capture during processing
   const [notifyEmail, setNotifyEmail] = useState("");
   const [notifySubmitted, setNotifySubmitted] = useState(false);
   const [notifyError, setNotifyError] = useState<string | null>(null);
 
-  // Download gate (results phase)
-  const [gateEmail, setGateEmail] = useState("");
-  const [gateCompany, setGateCompany] = useState("");
-  const [gateSubmitting, setGateSubmitting] = useState(false);
-  const [gateError, setGateError] = useState<string | null>(null);
-  const [downloadSubmitting, setDownloadSubmitting] = useState(false);
-  const [downloadError, setDownloadError] = useState<string | null>(null);
+  // Contact form (results phase)
+  const [contactEmail, setContactEmail] = useState("");
+  const [contactCompany, setContactCompany] = useState("");
+  const [contactDistributorType, setContactDistributorType] = useState("");
+  const [contactSubmitting, setContactSubmitting] = useState(false);
+  const [contactSubmitted, setContactSubmitted] = useState(false);
+  const [contactError, setContactError] = useState<string | null>(null);
 
   const eventSourceRef = useRef<EventSource | null>(null);
   const pollingTimeoutRef = useRef<number | null>(null);
@@ -208,28 +183,6 @@ const JobPage = () => {
 
   const isActiveRun = useCallback((runId: number) => activeRunRef.current === runId, []);
 
-  const clearDownloadAccess = useCallback((targetJobId: string) => {
-    clearStoredToken(targetJobId);
-    setDownloadToken(null);
-  }, []);
-
-  const markResultsExpired = useCallback((targetJobId: string) => {
-    clearDownloadAccess(targetJobId);
-    setGateError(null);
-    setDownloadError(null);
-    setStatus((current) => {
-      if (!current || current.job_id !== targetJobId) return current;
-      return {
-        ...current,
-        download: {
-          ...current.download,
-          state: "expired",
-        },
-      };
-    });
-    setPhase("complete");
-  }, [clearDownloadAccess]);
-
   const failJobFlow = useCallback((kind: FailureKind, message: string) => {
     closeEventSource();
     stopPolling();
@@ -249,10 +202,6 @@ const JobPage = () => {
       return true;
     } catch (err: unknown) {
       if (!isActiveRun(runId)) return false;
-      if (err instanceof ApiRequestError && err.code === "results_expired") {
-        markResultsExpired(targetJobId);
-        return true;
-      }
       const msg = err instanceof Error ? err.message : "Failed to load results";
       const kind: FailureKind = err instanceof ApiRequestError && err.code === "job_not_found"
         ? "job_not_found"
@@ -260,24 +209,16 @@ const JobPage = () => {
       failJobFlow(kind, msg);
       return false;
     }
-  }, [failJobFlow, isActiveRun, markResultsExpired]);
+  }, [failJobFlow, isActiveRun]);
 
   const handleStatusUpdate = useCallback(async (nextStatus: JobStatus, runId: number) => {
     if (!isActiveRun(runId)) return;
 
     setStatus(nextStatus);
 
-    if (nextStatus.download.state === "expired") {
-      markResultsExpired(nextStatus.job_id);
-    }
-
     if (isCompletedState(nextStatus.state)) {
       closeEventSource();
       stopPolling();
-      if (nextStatus.download.state === "expired") {
-        setPhase("complete");
-        return;
-      }
       await fetchResults(nextStatus.job_id, runId);
       return;
     }
@@ -288,9 +229,9 @@ const JobPage = () => {
     }
 
     setPhase("processing");
-  }, [closeEventSource, failJobFlow, fetchResults, isActiveRun, markResultsExpired, stopPolling]);
+  }, [closeEventSource, failJobFlow, fetchResults, isActiveRun, stopPolling]);
 
-  // Open SSE for live progress updates
+  // Fallback polling when SSE drops
   const startPolling = useCallback((targetJobId: string, runId: number, delayMs = 0) => {
     if (!isActiveRun(runId)) return;
 
@@ -381,8 +322,6 @@ const JobPage = () => {
     activeRunRef.current += 1;
     const runId = activeRunRef.current;
 
-    // Check localStorage for existing download token
-    const stored = getStoredToken(jobId);
     closeEventSource();
     stopPolling();
     setIsPollingFallback(false);
@@ -394,33 +333,21 @@ const JobPage = () => {
     setNotifyEmail("");
     setNotifySubmitted(false);
     setNotifyError(null);
-    setGateEmail("");
-    setGateCompany("");
-    setGateError(null);
-    setDownloadError(null);
-    setDownloadSubmitting(false);
-    setGateSubmitting(false);
-    setDownloadToken(stored ?? null);
+    setContactEmail("");
+    setContactCompany("");
+    setContactDistributorType("");
+    setContactSubmitting(false);
+    setContactSubmitted(false);
+    setContactError(null);
 
     const init = async () => {
       try {
-        // Fast path: REST check first (instant for completed/failed jobs)
         const initialStatus = await getJobStatus(jobId);
         if (!isActiveRun(runId)) return;
 
         setStatus(initialStatus);
-        if (initialStatus.download.state === "expired") {
-          clearDownloadAccess(jobId);
-        }
-        if (stored && initialStatus.download.state !== "expired") {
-          setNotifySubmitted(true);
-        }
 
         if (isCompletedState(initialStatus.state)) {
-          if (initialStatus.download.state === "expired") {
-            setPhase("complete");
-            return;
-          }
           await fetchResults(jobId, runId);
           return;
         }
@@ -448,7 +375,7 @@ const JobPage = () => {
       closeEventSource();
       stopPolling();
     };
-  }, [clearDownloadAccess, closeEventSource, failJobFlow, fetchResults, isActiveRun, jobId, openSSE, stopPolling]);
+  }, [closeEventSource, failJobFlow, fetchResults, isActiveRun, jobId, openSSE, stopPolling]);
 
   /* -- Handlers ---------------------------------------------------- */
 
@@ -458,13 +385,9 @@ const JobPage = () => {
     const runId = activeRunRef.current;
     setNotifyError(null);
     try {
-      const res = await submitEmail(jobId, notifyEmail, "");
+      await submitEmail(jobId, notifyEmail, "");
       if (!isActiveRun(runId)) return;
       setNotifySubmitted(true);
-      if (res.download_token) {
-        setDownloadToken(res.download_token);
-        storeToken(jobId, res.download_token);
-      }
     } catch (err: unknown) {
       if (!isActiveRun(runId)) return;
       const msg = err instanceof Error ? err.message : "Failed to submit";
@@ -472,76 +395,29 @@ const JobPage = () => {
     }
   };
 
-  const handleGateSubmit = async (e: React.FormEvent) => {
+  const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!gateEmail.includes("@") || !gateCompany.trim() || !jobId) {
-      setGateError("Email and company name are required.");
+    if (!contactEmail.includes("@") || !contactCompany.trim() || !contactDistributorType || !jobId) {
+      setContactError("All fields are required.");
       return;
     }
     const runId = activeRunRef.current;
-    setGateSubmitting(true);
-    setGateError(null);
+    setContactSubmitting(true);
+    setContactError(null);
     try {
-      const res = await submitEmail(jobId, gateEmail, gateCompany);
+      await submitEmail(jobId, contactEmail, contactCompany, contactDistributorType);
       if (!isActiveRun(runId)) return;
-      if (res.download_token) {
-        setDownloadToken(res.download_token);
-        storeToken(jobId, res.download_token);
-      } else {
-        setGateError("Download access is not available yet. Try again once processing completes.");
-      }
+      setContactSubmitted(true);
     } catch (err: unknown) {
       if (!isActiveRun(runId)) return;
       const msg = err instanceof Error ? err.message : "Failed to submit. Please try again.";
-      setGateError(msg);
+      setContactError(msg);
     } finally {
       if (isActiveRun(runId)) {
-        setGateSubmitting(false);
+        setContactSubmitting(false);
       }
     }
   };
-
-  const handleDownload = useCallback(async () => {
-    if (!jobId || !downloadToken) return;
-    const runId = activeRunRef.current;
-
-    setDownloadSubmitting(true);
-    setDownloadError(null);
-    setGateError(null);
-
-    try {
-      const { blob, filename } = await downloadResults(jobId, downloadToken);
-      if (!isActiveRun(runId)) return;
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => window.URL.revokeObjectURL(url), 0);
-    } catch (err: unknown) {
-      if (!isActiveRun(runId)) return;
-      if (err instanceof ApiRequestError) {
-        if (err.code === "download_forbidden") {
-          clearDownloadAccess(jobId);
-          setGateError(err.message);
-        } else if (err.code === "results_expired") {
-          markResultsExpired(jobId);
-          return;
-        } else if (err.code === "job_not_found") {
-          failJobFlow("job_not_found", err.message);
-          return;
-        }
-      }
-      const msg = err instanceof Error ? err.message : "Download failed";
-      setDownloadError(msg);
-    } finally {
-      if (isActiveRun(runId)) {
-        setDownloadSubmitting(false);
-      }
-    }
-  }, [clearDownloadAccess, downloadToken, failJobFlow, isActiveRun, jobId, markResultsExpired]);
 
   /* -- Computed ---------------------------------------------------- */
 
@@ -549,28 +425,16 @@ const JobPage = () => {
     ? computeVisualStage(status)
     : { stageIndex: 0, rowsDone: 0, rowsTotal: 0 };
   const progress = computeProgress(status);
-  const scoreColor = (s: number) =>
-    s >= 8 ? "text-score-excellent" : s >= 5 ? "text-score-good" : "text-score-poor";
-  const isExpired = status?.download.state === "expired";
-  const hasDownloadAccess = Boolean(downloadToken) && !isExpired;
-  const stepperStep = phase === "complete" ? (hasDownloadAccess ? 4 : 3) : 2;
+  const stepperStep = phase === "complete" ? 3 : 2;
 
   /* -- Shared header ----------------------------------------------- */
 
   const header = (
     <>
-      <div className="container mx-auto px-4 py-6 flex items-center justify-between">
+      <div className="container mx-auto px-4 py-6">
         <Link to="/" className="font-heading text-xl font-bold text-foreground">
           <span className="text-primary">Clean</span>Data
         </Link>
-        {phase === "complete" && (
-          <a href={`mailto:${contactEmail}`}>
-            <Button variant="default" size="sm">
-              <MessageSquare className="w-4 h-4" />
-              Talk to Our Team
-            </Button>
-          </a>
-        )}
       </div>
       <div className="container mx-auto px-4 py-2">
         <Stepper currentStep={stepperStep} />
@@ -753,28 +617,6 @@ const JobPage = () => {
   /*  COMPLETE (Results)                                               */
   /* ================================================================ */
 
-  if (isExpired && !summary) {
-    return (
-      <div className="min-h-screen bg-background flex flex-col">
-        {header}
-        <div className="flex-1 flex items-center justify-center px-4 pb-20">
-          <div className="max-w-md w-full text-center">
-            <AlertCircle className="w-12 h-12 text-amber-600 mx-auto mb-4" />
-            <h1 className="font-heading text-2xl font-bold text-foreground mb-2">
-              Results Expired
-            </h1>
-            <p className="text-muted-foreground mb-6">
-              This report is no longer available. Upload the catalog again to regenerate fresh results.
-            </p>
-            <Button variant="default" onClick={() => navigate("/")}>
-              Upload Again
-            </Button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (!summary) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
@@ -946,95 +788,74 @@ const JobPage = () => {
           </motion.div>
         )}
 
-        {/* Pepper CTA */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="bg-hero rounded-xl p-8 text-center mb-10"
-        >
-          <p className="text-hero-foreground font-heading text-xl font-semibold mb-2">
-            Your catalog has {summary.row_count.toLocaleString()} products ready for image sourcing.
-          </p>
-          <p className="text-hero-muted mb-5">Want us to help?</p>
-          <a href={`mailto:${contactEmail}`}>
-            <Button variant="cta-dark" size="lg">
-              <MessageSquare className="w-5 h-5" />
-              Talk to Our Team
-            </Button>
-          </a>
-        </motion.div>
-
-        {/* Download / Gate */}
-        {isExpired ? (
+        {/* Contact form / confirmation */}
+        {contactSubmitted ? (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-amber-50 border border-amber-300/40 rounded-xl p-8 text-center"
-          >
-            <AlertCircle className="w-10 h-10 text-amber-700 mx-auto mb-3" />
-            <h3 className="font-heading text-xl font-semibold text-foreground mb-2">This report has expired</h3>
-            <p className="text-sm text-muted-foreground mb-5">
-              Upload the catalog again to regenerate the downloadable CSV and results preview.
-            </p>
-            <Button variant="default" size="lg" onClick={() => navigate("/")}>
-              Upload Again
-            </Button>
-          </motion.div>
-        ) : hasDownloadAccess ? (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.4 }}
             className="bg-accent border border-primary/20 rounded-xl p-8 text-center"
           >
-            <Download className="w-10 h-10 text-primary mx-auto mb-3" />
-            <h3 className="font-heading text-xl font-semibold text-foreground mb-2">Your full report is ready</h3>
-            <p className="text-sm text-muted-foreground mb-5">
-              Includes cleaned names, brands, pack sizes, categories, quality scores, and GTIN status for all {summary.row_count.toLocaleString()} products.
+            <Check className="w-10 h-10 text-primary mx-auto mb-3" />
+            <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
+              We've received your request
+            </h3>
+            <p className="text-sm text-muted-foreground max-w-md mx-auto">
+              A member of our team will reach out shortly to walk you through the full results and discuss next steps for your catalog.
             </p>
-            <Button variant="cta" size="lg" onClick={handleDownload} disabled={downloadSubmitting}>
-              {downloadSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
-              {downloadSubmitting ? "Preparing download..." : "Download Full CSV"}
-            </Button>
-            {downloadError && <p className="text-destructive text-sm mt-3">{downloadError}</p>}
-            <p className="text-xs text-muted-foreground mt-4">Results expire in 24 hours</p>
           </motion.div>
         ) : (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="bg-card border border-border rounded-xl p-8 text-center relative overflow-hidden"
+            transition={{ delay: 0.4 }}
+            className="bg-hero rounded-xl p-8 text-center"
           >
-            <div className="absolute inset-0 bg-gradient-to-t from-card via-card/80 to-transparent pointer-events-none" />
-            <div className="relative z-10">
-              <Lock className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-              <h3 className="font-heading text-xl font-semibold text-foreground mb-2">
-                Enter your email to download your full report
-              </h3>
-              <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
-                Get the complete enriched CSV with cleaned names, brands, categories, quality scores, and GTIN validation for all {summary.row_count.toLocaleString()} products.
-              </p>
-              <form onSubmit={handleGateSubmit} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-                <Input
-                  type="email"
-                  placeholder="you@company.com"
-                  value={gateEmail}
-                  onChange={(e) => setGateEmail(e.target.value)}
+            <MessageSquare className="w-10 h-10 text-hero-foreground mx-auto mb-3" />
+            <h3 className="font-heading text-xl font-semibold text-hero-foreground mb-2">
+              Get your full enriched catalog
+            </h3>
+            <p className="text-hero-muted text-sm mb-6 max-w-lg mx-auto">
+              Your report with cleaned names, brands, categories, quality scores, and GTIN validation for all {summary.row_count.toLocaleString()} products is ready.
+              Leave your details and a representative will walk you through the results.
+            </p>
+            <form onSubmit={handleContactSubmit} className="flex flex-col gap-3 max-w-md mx-auto">
+              <Input
+                type="email"
+                placeholder="you@company.com"
+                value={contactEmail}
+                onChange={(e) => setContactEmail(e.target.value)}
+                className="bg-white/10 border-white/20 text-hero-foreground placeholder:text-hero-muted"
+                required
+              />
+              <Input
+                type="text"
+                placeholder="Company name"
+                value={contactCompany}
+                onChange={(e) => setContactCompany(e.target.value)}
+                className="bg-white/10 border-white/20 text-hero-foreground placeholder:text-hero-muted"
+                required
+              />
+              <div className="relative">
+                <select
+                  value={contactDistributorType}
+                  onChange={(e) => setContactDistributorType(e.target.value)}
                   required
-                />
-                <Input
-                  type="text"
-                  placeholder="Company name"
-                  value={gateCompany}
-                  onChange={(e) => setGateCompany(e.target.value)}
-                  required
-                />
-                <Button type="submit" variant="cta" size="default" className="whitespace-nowrap" disabled={gateSubmitting}>
-                  {gateSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Download Report"}
-                </Button>
-              </form>
-              {gateError && <p className="text-destructive text-sm mt-2">{gateError}</p>}
-            </div>
+                  className="w-full h-10 rounded-md border bg-white/10 border-white/20 text-hero-foreground px-3 pr-8 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                >
+                  <option value="" disabled className="text-muted-foreground bg-background">Distributor type</option>
+                  {DISTRIBUTOR_TYPES.map((type) => (
+                    <option key={type} value={type} className="text-foreground bg-background">{type}</option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-hero-muted pointer-events-none" />
+              </div>
+              <Button type="submit" variant="cta-dark" size="lg" className="mt-1" disabled={contactSubmitting}>
+                {contactSubmitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <MessageSquare className="w-5 h-5" />}
+                {contactSubmitting ? "Submitting..." : "Request Results"}
+              </Button>
+            </form>
+            {contactError && <p className="text-red-300 text-sm mt-2">{contactError}</p>}
           </motion.div>
         )}
       </div>

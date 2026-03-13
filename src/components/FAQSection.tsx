@@ -12,20 +12,16 @@ const faqs = [
     a: "Any format. Export from your ERP as-is. Any column names work — the AI figures out what each column contains.",
   },
   {
-    q: "Is my data secure?",
-    a: "Your catalog is processed on encrypted servers and automatically deleted within 24 hours. We never share your data.",
+    q: "How long does it take?",
+    a: "About 40 minutes for a typical catalog. Bookmark the results page and check back — you'll see a preview as soon as it's done.",
   },
   {
-    q: "How long does it take?",
-    a: "About 40 minutes for a typical catalog. Bookmark the results page and check back there when processing finishes.",
+    q: "How do I get the full report?",
+    a: "Once processing finishes you'll see a preview of your results. Leave your details and a member of our team will walk you through the full enriched catalog.",
   },
   {
     q: "What does it cost?",
     a: "Completely free. No credit card, no commitment.",
-  },
-  {
-    q: "What happens after?",
-    a: "You download your enriched catalog. If you'd like help with product images or content, we'll show you how Pepper can help.",
   },
 ];
 

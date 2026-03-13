@@ -5,7 +5,7 @@ from fastapi import APIRouter
 from app.api.errors import ApiError
 from app.domain.job_models import EmailCapture
 from app.infrastructure import job_store
-from app.services.job_service import capture_email
+from app.services.job_service import capture_lead
 
 router = APIRouter()
 
@@ -16,9 +16,9 @@ def _validate_job_id(job_id: str) -> None:
 
 
 @router.post("/api/jobs/{job_id}/email")
-async def capture_email_route(job_id: str, body: EmailCapture):
+async def capture_lead_route(job_id: str, body: EmailCapture):
     _validate_job_id(job_id)
     try:
-        return capture_email(job_id, body)
+        return capture_lead(job_id, body)
     except FileNotFoundError as exc:
         raise ApiError(404, "job_not_found", str(exc)) from exc

@@ -1,4 +1,4 @@
-import { Upload, Cpu, Download } from "lucide-react";
+import { Upload, Cpu, MessageSquare } from "lucide-react";
 import { motion } from "framer-motion";
 
 const steps = [
@@ -15,10 +15,10 @@ const steps = [
     desc: "AI cleans, scores, and enriches every product.",
   },
   {
-    icon: Download,
+    icon: MessageSquare,
     num: "3",
-    title: "Download",
-    desc: "Get your cleaned and enriched catalog.",
+    title: "Get Results",
+    desc: "Review the insights, then we walk you through the full report.",
   },
 ];
 

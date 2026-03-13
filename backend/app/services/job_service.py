@@ -1,15 +1,33 @@
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
 
-from app.domain.job_models import DownloadState, EmailCapture, JobSnapshot, JobState, UploadResponse
+from app.domain.job_models import EmailCapture, JobSnapshot, UploadResponse
 from app.infrastructure import job_store, thread_runner
 from pipeline.io_files import read_dataframe
+
+logger = logging.getLogger(__name__)
 
 
 class BusyError(RuntimeError):
     pass
+
+
+# TODO: Replace with a real notification channel (e.g. Slack webhook, SES email,
+# or a DB-backed queue that a rep dashboard polls).  For now this just logs —
+# the lead is already persisted in leads.jsonl by job_store.save_lead().
+def _notify_rep(job_id: str, email: str, company: str, distributor_type: str) -> None:
+    logger.info(
+        "rep_notification",
+        extra={
+            "job_id": job_id,
+            "email": email,
+            "company": company,
+            "distributor_type": distributor_type,
+        },
+    )
 
 
 def upload_file(
@@ -65,36 +83,20 @@ def upload_file(
         raise
 
 
-def get_job_snapshot(job_id: str, ttl_hours: int) -> JobSnapshot:
-    snapshot = job_store.load_snapshot(job_id, ttl_hours)
+def get_job_snapshot(job_id: str) -> JobSnapshot:
+    snapshot = job_store.load_snapshot(job_id)
     if snapshot is None:
         raise FileNotFoundError("Job not found")
     return snapshot
 
 
-def capture_email(job_id: str, body: EmailCapture) -> dict[str, str | bool | None]:
+def capture_lead(job_id: str, body: EmailCapture) -> dict[str, str | bool]:
+    """Save lead info and notify a rep to follow up."""
     record = job_store.load_job(job_id)
     if not record:
         raise FileNotFoundError("Job not found")
-    grant_download = bool(body.company.strip()) and record.state in {
-        JobState.completed,
-        JobState.completed_with_warnings,
-    }
-    token = job_store.set_email(job_id, body.email, body.company, grant_download=grant_download)
-    return {"ok": True, "email": body.email, "download_token": token}
 
+    job_store.save_lead(job_id, body.email, body.company, body.distributor_type)
+    _notify_rep(job_id, body.email, body.company, body.distributor_type)
 
-def get_download_path(job_id: str, token: str, ttl_hours: int) -> tuple[str, str]:
-    record = job_store.load_job(job_id)
-    if not record:
-        raise FileNotFoundError("Job not found")
-    if record.state not in {JobState.completed, JobState.completed_with_warnings}:
-        raise ValueError("Job is not complete")
-    if record.to_snapshot(ttl_hours).download.state == DownloadState.expired:
-        raise RuntimeError("Results have expired")
-    if not job_store.validate_download_token(job_id, token):
-        raise PermissionError("Invalid or missing download token. Submit your email first.")
-    output_file = job_store.output_path(job_id)
-    if not output_file.exists():
-        raise RuntimeError("Output file missing")
-    return str(output_file), record.input_filename
+    return {"ok": True, "email": body.email}

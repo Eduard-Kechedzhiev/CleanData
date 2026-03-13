@@ -33,12 +33,6 @@ export interface StageProgress {
   error: string | null;
 }
 
-export interface DownloadState {
-  state: "locked" | "expired";
-  requires_lead_capture: boolean;
-  expires_at: string | null;
-}
-
 export interface JobPipeline {
   current_stage: string | null;
   percent: number;
@@ -57,7 +51,6 @@ export interface JobStatus {
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
-  download: DownloadState;
   summary: JobSummaryMeta;
   pipeline: JobPipeline;
   failure: FailureInfo | null;
@@ -106,16 +99,10 @@ export interface JobSummary {
 export interface EmailSubmitResponse {
   ok: boolean;
   email: string;
-  download_token: string | null;
 }
 
 export interface PublicConfig {
   contact_email: string;
-}
-
-export interface DownloadResponse {
-  blob: Blob;
-  filename: string;
 }
 
 export interface ApiErrorPayload {
@@ -215,54 +202,16 @@ export async function getJobResults(jobId: string): Promise<JobSummary> {
   return requestJson<JobSummary>(`/api/jobs/${jobId}/results`, {}, "Failed to get results");
 }
 
-export async function submitEmail(jobId: string, email: string, company: string): Promise<EmailSubmitResponse> {
+export async function submitEmail(jobId: string, email: string, company: string, distributorType: string = ""): Promise<EmailSubmitResponse> {
   return requestJson<EmailSubmitResponse>(
     `/api/jobs/${jobId}/email`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, company }),
+      body: JSON.stringify({ email, company, distributor_type: distributorType }),
     },
     "Email submit failed",
   );
-}
-
-export function downloadUrl(jobId: string, token: string): string {
-  return `/api/jobs/${jobId}/download?token=${encodeURIComponent(token)}`;
-}
-
-function parseDownloadFilename(contentDisposition: string | null, fallback: string): string {
-  if (!contentDisposition) return fallback;
-
-  const utf8Match = contentDisposition.match(/filename\*=UTF-8''([^;]+)/i);
-  if (utf8Match?.[1]) return decodeURIComponent(utf8Match[1]);
-
-  const quotedMatch = contentDisposition.match(/filename="([^"]+)"/i);
-  if (quotedMatch?.[1]) return quotedMatch[1];
-
-  const plainMatch = contentDisposition.match(/filename=([^;"\s]+)/i);
-  if (plainMatch?.[1]) return plainMatch[1];
-
-  return fallback;
-}
-
-export async function downloadResults(jobId: string, token: string): Promise<DownloadResponse> {
-  const response = await fetch(downloadUrl(jobId, token));
-  if (!response.ok) {
-    const body = await readJson(response);
-    throw new ApiRequestError(
-      response.status,
-      buildApiErrorPayload(body, response.status, "Download failed"),
-    );
-  }
-
-  return {
-    blob: await response.blob(),
-    filename: parseDownloadFilename(
-      response.headers.get("content-disposition"),
-      `cleandata_${jobId}.csv`,
-    ),
-  };
 }
 
 export async function getPublicConfig(): Promise<PublicConfig> {
