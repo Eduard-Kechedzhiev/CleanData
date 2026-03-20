@@ -30,8 +30,8 @@ const UploadWidget = ({ onUpload, onSampleData, variant = "hero", uploading }: U
     if (!validTypes.includes(file.type) && !validExts.includes(ext)) {
       return "Please upload a CSV, TSV, or Excel file";
     }
-    if (file.size > 50 * 1024 * 1024) {
-      return "File exceeds 50MB. For larger catalogs, contact us.";
+    if (file.size > 500 * 1024 * 1024) {
+      return "File exceeds 500MB. For larger catalogs, contact us.";
     }
     if (file.size === 0) {
       return "This file appears to be empty";
@@ -104,7 +104,7 @@ const UploadWidget = ({ onUpload, onSampleData, variant = "hero", uploading }: U
                 or <span className="text-primary underline">browse files</span>
               </p>
               <p className={`text-xs mt-2 ${isHero ? "text-hero-muted/60" : "text-muted-foreground/60"}`}>
-                CSV, TSV, or Excel &bull; Up to 50MB
+                CSV, TSV, or Excel &bull; Up to 500MB
               </p>
             </label>
 
@@ -174,7 +174,7 @@ const UploadWidget = ({ onUpload, onSampleData, variant = "hero", uploading }: U
                   Uploading...
                 </>
               ) : (
-                "Upload & Start"
+                "Upload catalog"
               )}
             </Button>
 
@@ -197,7 +197,7 @@ const UploadWidget = ({ onUpload, onSampleData, variant = "hero", uploading }: U
         isHero ? "text-hero-muted/60" : "text-muted-foreground/60"
       }`}>
         <Shield className="w-3.5 h-3.5" />
-        <span className="text-xs">Encrypted in transit. Auto-deleted within 24 hours.</span>
+        <span className="text-xs">Your data is handled securely.</span>
       </div>
     </div>
   );

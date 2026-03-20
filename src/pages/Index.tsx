@@ -1,5 +1,4 @@
 import { useState, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import BenefitsSection from "@/components/BenefitsSection";
@@ -7,19 +6,26 @@ import SampleResults from "@/components/SampleResults";
 import BenchmarksSection from "@/components/BenchmarksSection";
 import FAQSection from "@/components/FAQSection";
 import FinalCTA from "@/components/FinalCTA";
+import UploadSuccess from "@/components/UploadSuccess";
 import { uploadFile } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 const Index = () => {
-  const navigate = useNavigate();
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
+  const [uploadResult, setUploadResult] = useState<{
+    queuePosition: number;
+    fileName: string;
+  } | null>(null);
 
   const handleUpload = useCallback(async (file: File) => {
     setUploading(true);
     try {
       const res = await uploadFile(file);
-      navigate(`/jobs/${res.job_id}`);
+      setUploadResult({
+        queuePosition: res.queue_position,
+        fileName: file.name,
+      });
     } catch (err: any) {
       toast({
         title: "Upload failed",
@@ -28,12 +34,24 @@ const Index = () => {
       });
       setUploading(false);
     }
-  }, [navigate, toast]);
+  }, [toast]);
 
   const handleSampleData = useCallback(() => {
     const el = document.getElementById("sample-results");
     if (el) el.scrollIntoView({ behavior: "smooth" });
   }, []);
+
+  if (uploadResult) {
+    return (
+      <div className="min-h-screen">
+        <Navbar />
+        <UploadSuccess
+          queuePosition={uploadResult.queuePosition}
+          fileName={uploadResult.fileName}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">

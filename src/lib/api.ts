@@ -3,106 +3,10 @@
  * All calls go through the Vite proxy (/api -> localhost:8000).
  */
 
-export interface UploadResponse {
-  job_id: string;
-  file_name: string;
-  row_count: number;
-  columns: string[];
-}
-
-export interface StageCounts {
-  completed: number;
-  total: number;
-}
-
-export interface FailureInfo {
-  stage: string | null;
-  message: string;
-  retryable: boolean;
-  occurred_at: string;
-}
-
-export interface StageProgress {
-  name: string;
-  state: "pending" | "running" | "completed" | "skipped" | "failed";
-  percent: number;
-  counts: StageCounts;
-  started_at: string | null;
-  completed_at: string | null;
-  message: string | null;
-  error: string | null;
-}
-
-export interface JobPipeline {
-  current_stage: string | null;
-  percent: number;
-  stage_order: string[];
-  stages: StageProgress[];
-}
-
-export interface JobSummaryMeta {
-  row_count: number;
-  input_filename: string;
-}
-
-export interface JobStatus {
-  job_id: string;
-  state: "queued" | "running" | "completed" | "completed_with_warnings" | "failed";
-  created_at: string;
-  started_at: string | null;
-  completed_at: string | null;
-  summary: JobSummaryMeta;
-  pipeline: JobPipeline;
-  failure: FailureInfo | null;
-  warnings: FailureInfo[];
-}
-
-export interface JobUpdatedEnvelope {
-  type: "job.updated";
-  sequence: number;
-  job_id: string;
-  job: JobStatus;
-}
-
-export interface JobDeletedEnvelope {
-  type: "job.deleted";
-  sequence: number;
-  job_id: string;
-  job: null;
-}
-
-export type JobEventEnvelope = JobUpdatedEnvelope | JobDeletedEnvelope;
-
-export interface SampleRow {
-  original: string;
-  cleaned: string;
-  brand: string;
-  pack: string;
-  category: string;
-  score: number;
-}
-
-export interface JobSummary {
-  job_id: string;
-  row_count: number;
-  column_count: number;
-  avg_quality_score: number | null;
-  quality_distribution: { score: string; count: number }[];
-  brands_extracted: number;
-  top_brands: { name: string; count: number }[];
-  gtins_found: number;
-  gtins_total: number;
-  category_breakdown: { name: string; count: number }[];
-  sample_rows: SampleRow[];
-}
-
-export interface EmailSubmitResponse {
-  ok: boolean;
-  email: string;
-}
-
-export interface PublicConfig {
-  contact_email: string;
+export interface UploadUrlResponse {
+  upload_url: string;
+  s3_key: string;
+  queue_position: number;
 }
 
 export interface ApiErrorPayload {
@@ -135,7 +39,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 async function readJson(response: Response): Promise<unknown> {
   const text = await response.text();
   if (!text) return null;
-
   try {
     return JSON.parse(text);
   } catch {
@@ -176,48 +79,59 @@ async function requestJson<T>(input: RequestInfo | URL, init: RequestInit, fallb
   if (!response.ok) {
     throw new ApiRequestError(
       response.status,
-      buildApiErrorPayload(
-        body,
-        response.status,
-        fallbackMessage || response.statusText || "Request failed",
-      ),
+      buildApiErrorPayload(body, response.status, fallbackMessage || response.statusText || "Request failed"),
     );
   }
 
   return body as T;
 }
 
-export async function uploadFile(file: File): Promise<UploadResponse> {
-  const form = new FormData();
-  form.append("file", file);
+/**
+ * Full upload flow:
+ * 1. Get a presigned S3 PUT URL from the backend
+ * 2. Upload the file directly to S3
+ * 3. Notify the team via backend
+ * Returns the queue position for display.
+ */
+export async function uploadFile(file: File): Promise<{ queue_position: number }> {
+  const contentType = file.type || "application/octet-stream";
 
-  return requestJson<UploadResponse>("/api/upload", { method: "POST", body: form }, "Upload failed");
-}
-
-export async function getJobStatus(jobId: string): Promise<JobStatus> {
-  return requestJson<JobStatus>(`/api/jobs/${jobId}/status`, {}, "Failed to get status");
-}
-
-export async function getJobResults(jobId: string): Promise<JobSummary> {
-  return requestJson<JobSummary>(`/api/jobs/${jobId}/results`, {}, "Failed to get results");
-}
-
-export async function submitEmail(jobId: string, email: string, company: string, distributorType: string = ""): Promise<EmailSubmitResponse> {
-  return requestJson<EmailSubmitResponse>(
-    `/api/jobs/${jobId}/email`,
+  // 1. Get presigned URL
+  const { upload_url, s3_key, queue_position } = await requestJson<UploadUrlResponse>(
+    "/api/upload-url",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, company, distributor_type: distributorType }),
+      body: JSON.stringify({ filename: file.name, content_type: contentType }),
     },
-    "Email submit failed",
+    "Failed to prepare upload",
   );
-}
 
-export async function getPublicConfig(): Promise<PublicConfig> {
-  return requestJson<PublicConfig>("/api/config", {}, "Failed to get config");
-}
+  // 2. Upload directly to S3
+  const s3Response = await fetch(upload_url, {
+    method: "PUT",
+    body: file,
+    headers: { "Content-Type": contentType },
+  });
 
-export async function getSampleResults(): Promise<JobSummary> {
-  return requestJson<JobSummary>("/api/sample", {}, "Failed to get sample");
+  if (!s3Response.ok) {
+    throw new ApiRequestError(s3Response.status, {
+      code: "s3_upload_failed",
+      message: "Failed to upload file. Please try again.",
+      retryable: true,
+    });
+  }
+
+  // 3. Notify team (best-effort — don't fail the user if this errors)
+  try {
+    await requestJson("/api/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ s3_key, filename: file.name }),
+    }, "Notification failed");
+  } catch (err) {
+    console.warn("Team notification failed, but upload succeeded:", err);
+  }
+
+  return { queue_position };
 }
