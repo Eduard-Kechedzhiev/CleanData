@@ -61,7 +61,7 @@ const metrics: MetricConfig[] = [
     unit: "%",
     color: "#10b981",
     description:
-      "Enriched product data drives up to 30% higher conversion rates for online distributors.",
+      "When product names are cryptic and descriptions incomplete, buyers can't find what they need — and they leave. Distributors that invest in clean, enriched product data see up to 30% higher conversion rates because customers can search, compare, and buy with confidence.",
     source: "Distributor Data Solutions & McKinsey",
     domain: [0, 5],
     data: [
@@ -83,7 +83,7 @@ const metrics: MetricConfig[] = [
     unit: "%",
     color: "#3b82f6",
     description:
-      "Accurate product descriptions reduce returns — 40% of consumers return products due to inaccurate content.",
+      "Returns are expensive — and 40% of them happen because the product didn't match its description. Clean data means accurate names, correct pack sizes, and proper brand attribution, so customers get exactly what they ordered and stay loyal.",
     source: "Salsify Consumer Research & Feedonomics",
     domain: [75, 100],
     data: [
@@ -105,7 +105,7 @@ const metrics: MetricConfig[] = [
     unit: "%",
     color: "#8b5cf6",
     description:
-      "Clean product names make items findable in search — search users are 15% of visitors but drive 45% of revenue.",
+      "Site search is where the money is — search users make up just 15% of visitors but drive 45% of revenue. When product names are full of jargon and abbreviations, items become invisible in search results. Standardized, clean data ensures every product in your catalog is discoverable.",
     source: "McKinsey & Baymard Institute",
     domain: [0, 100],
     data: [
@@ -375,10 +375,10 @@ const BenchmarksSection = () => {
                   transition={{ duration: 0.2 }}
                   className="mt-4 pt-4 border-t border-border"
                 >
-                  <p className="text-sm text-foreground/80">
+                  <p className="text-sm text-foreground/80 leading-relaxed">
                     {current.description}
                   </p>
-                  <p className="text-[11px] text-muted-foreground/60 mt-1">
+                  <p className="text-[11px] text-muted-foreground/60 mt-2">
                     Source: {current.source}
                   </p>
                 </motion.div>
